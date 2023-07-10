@@ -27,10 +27,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.macOS:
         return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -67,8 +64,17 @@ class DefaultFirebaseOptions {
     messagingSenderId: '404775449223',
     projectId: 'flutterproject-22248',
     storageBucket: 'flutterproject-22248.appspot.com',
-    iosClientId: '404775449223-kp46k01i0mtp2dooej60aks7sls26m6p.apps.googleusercontent.com',
+    iosClientId:
+        '404775449223-kp46k01i0mtp2dooej60aks7sls26m6p.apps.googleusercontent.com',
     iosBundleId: 'com.example.todoapp',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyBXzbOEhyaF_rmxZ_hEiVSrLTf_ky9IJx0',
+    appId: '1:404775449223:android:ff6796d8738af5b587be22',
+    messagingSenderId: '404775449223',
+    projectId: 'flutterproject-22248',
+    storageBucket: 'flutterproject-22248.appspot.com',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -77,7 +83,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '404775449223',
     projectId: 'flutterproject-22248',
     storageBucket: 'flutterproject-22248.appspot.com',
-    iosClientId: '404775449223-5fgbl4dck77emaarisikuh287qf3vpb2.apps.googleusercontent.com',
+    iosClientId:
+        '404775449223-5fgbl4dck77emaarisikuh287qf3vpb2.apps.googleusercontent.com',
     iosBundleId: 'com.example.todoapp.RunnerTests',
   );
 }

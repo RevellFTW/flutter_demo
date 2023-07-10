@@ -1,4 +1,5 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_login/flutter_login.dart';
 
@@ -6,9 +7,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
-import 'package:intl/intl.dart';
 
+import 'dart:typed_data';
+//import 'package:intl/intl.dart';
 import 'firebase_options.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +25,7 @@ void main() async {
 
 final db = FirebaseFirestore.instance;
 final FirebaseAuth _auth = FirebaseAuth.instance;
+final messaging = FirebaseMessaging.instance;
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
@@ -164,13 +169,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
   final FirebaseFirestore db = FirebaseFirestore.instance;
 
   FirebaseMessaging messaging = FirebaseMessaging.instance;
-  String? fcmToken;
-
-  void retrieveFCMToken() async {
-    String? token = await messaging.getToken();
-    fcmToken = token;
-    print('FCM Token: $fcmToken');
-  }
+  String? mtoken = "";
 
   Stopwatch _stopwatch = Stopwatch();
   late Timer _timer;
@@ -179,8 +178,61 @@ class _TodoListScreenState extends State<TodoListScreen> {
   @override
   void initState() {
     super.initState();
-    retrieveFCMToken();
+    requestPermission();
+    getToken();
     _startTimer();
+  }
+
+  void getToken() async {
+    await FirebaseMessaging.instance.getToken().then((token) {
+      setState(() {
+        mtoken = token;
+        print("my token is $mtoken");
+      });
+      saveToken(mtoken!);
+    });
+  }
+
+  void requestPermission() async {
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+    const vapidKey =
+        "BAtT0PRD3_LdaR9i1eIt-MHS8IsHs97Ib_Uva8mS9uQshRAWk_1txhuRdNTa4eLqheq218J__iIjeWHsZAq0sE8";
+    String? token;
+    NotificationSettings settings = await messaging.requestPermission(
+      alert: true,
+      announcement: false,
+      badge: true,
+      carPlay: false,
+      criticalAlert: false,
+      provisional: false,
+      sound: true,
+    );
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      print('User granted permission');
+    } else if (settings.authorizationStatus ==
+        AuthorizationStatus.provisional) {
+      print('User granted provisional permission');
+    } else {
+      print('User declined or has not accepted permission');
+    }
+
+    if (DefaultFirebaseOptions.currentPlatform == DefaultFirebaseOptions.web) {
+      token = await messaging.getToken(
+        vapidKey: vapidKey,
+      );
+    } else {
+      token = await messaging.getToken();
+    }
+
+    if (kDebugMode) {
+      print('Registration Token=$token');
+    }
+  }
+
+  void saveToken(String token) async {
+    await FirebaseFirestore.instance.collection("UserTokens").doc("User2").set({
+      "token": token,
+    });
   }
 
   @override
@@ -282,6 +334,7 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
 
   String? taskName;
   String? taskDescription;
+  String? taskPriority;
 
   @override
   Widget build(BuildContext context) {
@@ -326,9 +379,10 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
                 db.collection('todos').add({
                   'taskName': taskName,
                   'taskDescription': taskDescription,
+                }).then((_) {
+                  sendNotification(taskName!, taskDescription!);
+                  Navigator.pop(context);
                 });
-
-                Navigator.pop(context);
               }
             },
             child: Text('Feladat megadása'),
@@ -336,6 +390,45 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
         ],
       ),
     );
+  }
+
+  void sendNotification(String taskName, String taskDescription) async {
+    String serverKey =
+        'AAAAXj5_Moc:APA91bEAt0jcbmGF9EGhpwAufWuKqr3bHqtdZ_xm_UQi5KGSog586k0Md_2soKYBJKJ9Ov2W9MewDjLj9R1S-2AKL8wZSVcWTQhaPPu-QfJRbtco6qsLXAbiwE1H0s25osBNvhbYbmm2';
+    String fcmToken =
+        'dmf9WZDAmmqGc80MRE74rx:APA91bEyXC3yl6mavmEhTgneHB1rFyQxO0g_GbYYQ6RJp_PlCtU7CSqq5a3GH_3xjtj7XQulF1ZCPlhBDl4l6x8gX-Kngr07rsY7fjJH5oHjWGbZT6TjOGu-AF0TdoyQ6U0zBnZPx2tD';
+    Map<String, dynamic> notification = {
+      'title': taskName,
+      'body': taskDescription,
+    };
+
+// Prepare the request headers and payload
+    Map<String, String> headers = {
+      'Content-Type': 'application/json',
+      'Authorization': 'key=$serverKey',
+    };
+
+    Map<String, dynamic> payload = {
+      'to': fcmToken,
+      'notification': notification,
+    };
+
+    // Send the POST request to FCM REST API
+    http
+        .post(
+      Uri.parse('https://fcm.googleapis.com/fcm/send'),
+      headers: headers,
+      body: json.encode(payload),
+    )
+        .then((response) {
+      if (response.statusCode == 200) {
+        print('Notification sent successfully');
+      } else {
+        print('Failed to send notification');
+      }
+    }).catchError((error) {
+      print('Error sending notification: $error');
+    });
   }
 }
 
