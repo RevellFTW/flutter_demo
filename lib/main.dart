@@ -53,9 +53,9 @@ class MyHomePage extends StatelessWidget {
       return null;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'user-not-found') {
-        return 'No user found for that email.';
+        return 'Nem található felhasználó ezzel az e-mail címmel.';
       } else if (e.code == 'wrong-password') {
-        return 'Wrong password provided for that user.';
+        return 'Helytelen jelszó.';
       }
       return e.message;
     } catch (e) {
@@ -73,9 +73,9 @@ class MyHomePage extends StatelessWidget {
       return null;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'weak-password') {
-        return 'The password provided is too weak.';
+        return 'A megadott jelszó túl gyenge.';
       } else if (e.code == 'email-already-in-use') {
-        return 'The account already exists for that email.';
+        return 'Létezik már felhasználó ilyen e-mail címmel.';
       }
       return e.message;
     } catch (e) {
@@ -100,6 +100,40 @@ class MyHomePage extends StatelessWidget {
             builder: (context) => const PatientSelectionScreen(),
           ));
         },
+        messages: LoginMessages(
+          userHint: 'Felhasználónév',
+          passwordHint: 'Jelszó',
+          confirmPasswordHint: 'Jelszó megerősítése',
+          loginButton: 'Bejelentkezés',
+          signupButton: 'Regisztráció',
+          forgotPasswordButton: 'Elfelejtett jelszó',
+          recoverPasswordButton: 'Jelszó visszaállítása',
+          goBackButton: 'Vissza',
+          confirmPasswordError: 'A jelszavak nem egyeznek',
+          recoverPasswordIntro: 'Jelszó visszaállítás',
+          recoverPasswordDescription:
+              'Az e-mail címedre küldünk egy linket a jelszó visszaállításához',
+          recoverPasswordSuccess: 'Jelszó visszaállítása sikeres',
+        ),
+        theme: LoginTheme(
+          accentColor: Colors.white,
+          primaryColor: Colors.blue,
+          errorColor: Colors.red,
+          titleStyle: const TextStyle(
+              color: Colors.white,
+              fontFamily: 'OpenSans',
+              letterSpacing: 4,
+              fontWeight: FontWeight.bold,
+              fontSize: 28),
+          textFieldStyle: const TextStyle(
+              color: Colors.blue, fontFamily: 'OpenSans', fontSize: 16),
+          buttonStyle: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+          cardTheme: const CardTheme(
+              elevation: 5,
+              margin:
+                  EdgeInsets.only(top: 15, bottom: 15, left: 20, right: 20)),
+        ),
       ),
     );
   }
@@ -309,16 +343,30 @@ class _TodoListScreenState extends State<TodoListScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            builder: (BuildContext context) {
-              return AddTaskWidget();
-            },
-          );
-        },
-        child: Icon(Icons.add),
+      //this is the plus button
+      floatingActionButton: FractionallySizedBox(
+        widthFactor: 0.2, // Adjust the width factor as needed
+        child: FloatingActionButton(
+          onPressed: () {
+            showModalBottomSheet(
+              context: context,
+              builder: (BuildContext context) {
+                return AddTaskWidget();
+              },
+            );
+          },
+          child: Icon(Icons.add),
+          mini: MediaQuery.of(context).size.width <
+              600, // Set mini to true for smaller screens
+          backgroundColor: Colors.blue, // Customize the background color
+          foregroundColor: Colors.white, // Customize the icon color
+          elevation: 4.0, // Customize the elevation
+          shape: RoundedRectangleBorder(
+            borderRadius:
+                BorderRadius.circular(8.0), // Customize the border radius
+          ),
+          heroTag: null, // Set heroTag to null to avoid conflicts
+        ),
       ),
     );
   }
@@ -344,7 +392,7 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'Add Task',
+            'Tevékenység hozzáadása',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -353,7 +401,7 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
           const SizedBox(height: 20),
           TextField(
             decoration: const InputDecoration(
-              labelText: 'Task Name',
+              labelText: 'Tevékenység neve',
             ),
             onChanged: (value) {
               setState(() {
@@ -364,7 +412,7 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
           const SizedBox(height: 10),
           TextField(
             decoration: const InputDecoration(
-              labelText: 'Task Description',
+              labelText: 'Tevékenység leírása',
             ),
             onChanged: (value) {
               setState(() {
@@ -396,7 +444,7 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
     String serverKey =
         'AAAAXj5_Moc:APA91bEAt0jcbmGF9EGhpwAufWuKqr3bHqtdZ_xm_UQi5KGSog586k0Md_2soKYBJKJ9Ov2W9MewDjLj9R1S-2AKL8wZSVcWTQhaPPu-QfJRbtco6qsLXAbiwE1H0s25osBNvhbYbmm2';
     String fcmToken =
-        'dmf9WZDAmmqGc80MRE74rx:APA91bEyXC3yl6mavmEhTgneHB1rFyQxO0g_GbYYQ6RJp_PlCtU7CSqq5a3GH_3xjtj7XQulF1ZCPlhBDl4l6x8gX-Kngr07rsY7fjJH5oHjWGbZT6TjOGu-AF0TdoyQ6U0zBnZPx2tD';
+        'cnLKBQdJjJMBRvwK0CQGLP:APA91bHZi0MZhOcTe5U--VHjDi4gsGKYPg1NTFoADf7Q7ZaKoX5qIPQw8-h8ZM4X7msouJ7zDYvgXIRZe28oXTjosc3SVHKrOPFc9FM76WkM50NiFCh2EepYwE8QRk94VXxLkJRXs168';
     Map<String, dynamic> notification = {
       'title': taskName,
       'body': taskDescription,
@@ -439,21 +487,35 @@ class TimeTrackerWidget extends StatelessWidget {
 
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
-    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    return '${twoDigits(duration.inHours)}:$twoDigitMinutes:$twoDigitSeconds';
+    String formattedDuration = '';
+
+    if (duration.inHours > 0) {
+      formattedDuration += '${duration.inHours}ó ';
+    }
+
+    if (duration.inMinutes > 0) {
+      formattedDuration += '${duration.inMinutes.remainder(60)}p ';
+    }
+
+    formattedDuration += '${duration.inSeconds.remainder(60)}mp';
+
+    return formattedDuration.trim();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.grey,
-      padding: EdgeInsets.all(16),
-      child: Text(
-        _formatDuration(duration),
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
+    return Center(
+      child: Card(
+        color: Colors.grey[200],
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            _formatDuration(duration),
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
       ),
     );
