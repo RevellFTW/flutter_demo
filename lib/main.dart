@@ -1,3 +1,6 @@
+//import 'dart:html';
+//import 'dart:js';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +16,9 @@ import 'dart:typed_data';
 import 'firebase_options.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
+//import 'package:geolocator_web/geolocator_web.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +32,7 @@ void main() async {
 final db = FirebaseFirestore.instance;
 final FirebaseAuth _auth = FirebaseAuth.instance;
 final messaging = FirebaseMessaging.instance;
+String? globalToken = "";
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
@@ -154,37 +161,67 @@ class PatientSelectionScreen extends StatelessWidget {
           ListTile(
             title: const Text('Autó Géza'),
             onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => TodoListScreen(patientId: 'Géza'),
-                ),
-              );
+              _requestLocationPermission("Géza", context);
             },
           ),
           ListTile(
             title: const Text('Drift Elek'),
             onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => TodoListScreen(patientId: 'Elek'),
-                ),
-              );
+              _requestLocationPermission("Elek", context);
             },
           ),
           ListTile(
             title: const Text('Monza Ferenc'),
             onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => TodoListScreen(patientId: 'Ferenc'),
-                ),
-              );
+              _requestLocationPermission("Ferenc", context);
             },
           ),
         ],
+      ),
+    );
+  }
+
+  void _requestLocationPermission(
+      String patientId, BuildContext context) async {
+    if (await Geolocator.isLocationServiceEnabled()) {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission != LocationPermission.always &&
+            permission != LocationPermission.whileInUse) {
+          // Handle the case when location permission is not granted
+          return;
+        }
+      }
+      final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high);
+      print(position.latitude);
+      print(position.longitude);
+      //print city name
+      // Use the user's coordinates to get the city name
+      _getCityName(position.latitude, position.longitude, patientId, context);
+    } else {
+      // Handle the case when location services are not enabled
+      return;
+    }
+  }
+
+  // Get city name based on coordinates
+  void _getCityName(double latitude, double longitude, String patientId,
+      BuildContext context) async {
+    List<Placemark> placemarks =
+        await placemarkFromCoordinates(latitude, longitude);
+    Placemark place = placemarks[0];
+    String cityName = place.locality ?? '';
+    print(cityName);
+    // Pass the city name to the TodoListScreen
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TodoListScreen(
+          patientId: patientId,
+          cityName: cityName,
+        ),
       ),
     );
   }
@@ -192,8 +229,10 @@ class PatientSelectionScreen extends StatelessWidget {
 
 class TodoListScreen extends StatefulWidget {
   final String patientId;
+  final String? cityName;
 
-  const TodoListScreen({Key? key, required this.patientId}) : super(key: key);
+  const TodoListScreen({Key? key, required this.patientId, this.cityName})
+      : super(key: key);
 
   @override
   _TodoListScreenState createState() => _TodoListScreenState();
@@ -257,6 +296,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
     } else {
       token = await messaging.getToken();
     }
+    globalToken = token;
 
     if (kDebugMode) {
       print('Registration Token=$token');
@@ -300,6 +340,19 @@ class _TodoListScreenState extends State<TodoListScreen> {
       ),
       body: Column(
         children: [
+          Align(
+            alignment: Alignment.bottomLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
+              child: Text(
+                'City: ${widget.cityName}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
           TimeTrackerWidget(duration: _elapsedTime),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
@@ -307,7 +360,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
               builder: (BuildContext context,
                   AsyncSnapshot<QuerySnapshot> snapshot) {
                 if (!snapshot.hasData) {
-                  return Center(
+                  return const Center(
                     child: CircularProgressIndicator(),
                   );
                 }
@@ -373,6 +426,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
 }
 
 class AddTaskWidget extends StatefulWidget {
+  String token = "";
   @override
   _AddTaskWidgetState createState() => _AddTaskWidgetState();
 }
@@ -444,7 +498,7 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
     String serverKey =
         'AAAAXj5_Moc:APA91bEAt0jcbmGF9EGhpwAufWuKqr3bHqtdZ_xm_UQi5KGSog586k0Md_2soKYBJKJ9Ov2W9MewDjLj9R1S-2AKL8wZSVcWTQhaPPu-QfJRbtco6qsLXAbiwE1H0s25osBNvhbYbmm2';
     String fcmToken =
-        'cnLKBQdJjJMBRvwK0CQGLP:APA91bHZi0MZhOcTe5U--VHjDi4gsGKYPg1NTFoADf7Q7ZaKoX5qIPQw8-h8ZM4X7msouJ7zDYvgXIRZe28oXTjosc3SVHKrOPFc9FM76WkM50NiFCh2EepYwE8QRk94VXxLkJRXs168';
+        'duLVi7gRSE-wAs44HhcKmg:APA91bEDaC9xmLqo5pUpYRAnINKuehjw-Om7IvO21L6WK_5UfOdESW9T55XaGJqz7r8djX5pZVhSRr0NAO34lrtUlaYD-raPd8vwM-VMbqkAhLqKU_vNC3JX380GYMI6j9x1gjfsO0WO';
     Map<String, dynamic> notification = {
       'title': taskName,
       'body': taskDescription,
@@ -457,8 +511,15 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
     };
 
     Map<String, dynamic> payload = {
-      'to': fcmToken,
+      'to': globalToken,
       'notification': notification,
+      'android': {
+        'priority': 'high',
+        'notification': {
+          'sound': 'default',
+          'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+        },
+      },
     };
 
     // Send the POST request to FCM REST API
