@@ -1,6 +1,8 @@
 //import 'dart:html';
 //import 'dart:js';
 
+import 'dart:math';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -16,9 +18,7 @@ import 'dart:typed_data';
 import 'firebase_options.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:geocoding/geocoding.dart';
-import 'package:geolocator/geolocator.dart';
-//import 'package:geolocator_web/geolocator_web.dart';
+import 'package:location/location.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -183,44 +183,50 @@ class PatientSelectionScreen extends StatelessWidget {
 
   void _requestLocationPermission(
       String patientId, BuildContext context) async {
-    if (await Geolocator.isLocationServiceEnabled()) {
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission != LocationPermission.always &&
-            permission != LocationPermission.whileInUse) {
-          // Handle the case when location permission is not granted
-          return;
-        }
-      }
-      final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high);
-      print(position.latitude);
-      print(position.longitude);
-      //print city name
-      // Use the user's coordinates to get the city name
-      _getCityName(position.latitude, position.longitude, patientId, context);
-    } else {
-      // Handle the case when location services are not enabled
-      return;
-    }
-  }
+    Location location = Location();
+    bool _serviceEnabled;
+    PermissionStatus _permissionGranted;
+    LocationData _locationData;
 
-  // Get city name based on coordinates
-  void _getCityName(double latitude, double longitude, String patientId,
-      BuildContext context) async {
-    List<Placemark> placemarks =
-        await placemarkFromCoordinates(latitude, longitude);
-    Placemark place = placemarks[0];
-    String cityName = place.locality ?? '';
-    print(cityName);
+    // Check if location services are enabled
+    _serviceEnabled = await location.serviceEnabled();
+    if (!_serviceEnabled) {
+      _serviceEnabled = await location.requestService();
+      if (!_serviceEnabled) {
+        // Handle case when location services are not enabled
+        return;
+      }
+    }
+
+    // Check if the app has permission to access location
+    _permissionGranted = await location.hasPermission();
+    if (_permissionGranted == PermissionStatus.denied) {
+      _permissionGranted = await location.requestPermission();
+      if (_permissionGranted != PermissionStatus.granted) {
+        // Handle case when permission is not granted
+        return;
+      }
+    }
+
+    // Get the current location
+    _locationData = await location.getLocation();
+    double latitude = _locationData.latitude!;
+    double longitude = _locationData.longitude!;
+
+    print(latitude);
+    print(longitude);
+
+    String coordinate = "$latitude,$longitude";
+
+    // Get city name based on coordinates
+
     // Pass the city name to the TodoListScreen
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => TodoListScreen(
           patientId: patientId,
-          cityName: cityName,
+          coordinate: coordinate,
         ),
       ),
     );
@@ -229,9 +235,9 @@ class PatientSelectionScreen extends StatelessWidget {
 
 class TodoListScreen extends StatefulWidget {
   final String patientId;
-  final String? cityName;
+  final String? coordinate;
 
-  const TodoListScreen({Key? key, required this.patientId, this.cityName})
+  const TodoListScreen({Key? key, required this.patientId, this.coordinate})
       : super(key: key);
 
   @override
@@ -345,7 +351,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
             child: Padding(
               padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
               child: Text(
-                'City: ${widget.cityName}',
+                'City: ${widget.coordinate}',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
