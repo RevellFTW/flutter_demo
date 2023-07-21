@@ -19,6 +19,7 @@ import 'firebase_options.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:location/location.dart';
+import 'package:prompt_dialog/prompt_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -87,11 +88,13 @@ class MyHomePage extends StatelessWidget {
       return e.message;
     } catch (e) {
       return e.toString();
+      //todo handle already used e-mail address;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    var name = "name";
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ápoló alkalmazás'),
@@ -101,6 +104,19 @@ class MyHomePage extends StatelessWidget {
         title: 'Ápoló alkalmazás',
         onLogin: _authUser,
         onSignup: _registerUser,
+        additionalSignupFields: [
+          UserFormField(
+            keyName: name,
+            displayName: "Név",
+            defaultValue: "Jane Doe",
+            fieldValidator: (value) {
+              if (value == null || value.isEmpty) {
+                return 'Kérlek add meg a neved';
+              }
+              return null;
+            },
+          ),
+        ],
         onRecoverPassword: ((p0) => null),
         onSubmitAnimationCompleted: () {
           Navigator.of(context).pushReplacement(MaterialPageRoute(
