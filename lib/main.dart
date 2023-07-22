@@ -1,8 +1,6 @@
 //import 'dart:html';
 //import 'dart:js';
 
-import 'dart:math';
-
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,13 +11,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 
-import 'dart:typed_data';
-//import 'package:intl/intl.dart';
 import 'firebase_options.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:location/location.dart';
-import 'package:prompt_dialog/prompt_dialog.dart';
+import 'package:dropdown_button2/dropdown_button2.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -292,10 +288,8 @@ class TodoListScreen extends StatefulWidget {
 
 class _TodoListScreenState extends State<TodoListScreen> {
   final FirebaseFirestore db = FirebaseFirestore.instance;
-
   FirebaseMessaging messaging = FirebaseMessaging.instance;
   String? mtoken = "";
-
   Stopwatch _stopwatch = Stopwatch();
   late Timer _timer;
   Duration _elapsedTime = Duration.zero;
@@ -456,7 +450,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
             showModalBottomSheet(
               context: context,
               builder: (BuildContext context) {
-                return AddTaskWidget();
+                return AddTaskWidget(patientId: widget.patientId);
               },
             );
           },
@@ -479,6 +473,10 @@ class _TodoListScreenState extends State<TodoListScreen> {
 
 class AddTaskWidget extends StatefulWidget {
   String token = "";
+
+  final String patientId;
+
+  AddTaskWidget({super.key, required this.patientId});
   @override
   _AddTaskWidgetState createState() => _AddTaskWidgetState();
 }
@@ -486,39 +484,62 @@ class AddTaskWidget extends StatefulWidget {
 class _AddTaskWidgetState extends State<AddTaskWidget> {
   final FirebaseFirestore db = FirebaseFirestore.instance;
 
-  String? taskName;
   String? taskDescription;
-  String? taskPriority;
+
+  final List<String> items = [
+    'Bevásárlás',
+    'Mosás',
+    'Séta',
+    'Egyedi',
+  ];
+  String? selectedValue;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(20),
+    return Scaffold(
+        body: Center(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'Tevékenység hozzáadása',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+          DropdownButton2<String>(
+            isExpanded: true,
+            hint: Text(
+              'Válasszon tevékenységet',
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).hintColor,
+              ),
+            ),
+            items: items
+                .map((String item) => DropdownMenuItem<String>(
+                      value: item,
+                      child: Text(
+                        item,
+                        style: const TextStyle(
+                          fontSize: 14,
+                        ),
+                      ),
+                    ))
+                .toList(),
+            value: selectedValue,
+            onChanged: (String? value) {
+              setState(() {
+                selectedValue = value;
+              });
+            },
+            buttonStyleData: const ButtonStyleData(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              height: 40,
+              width: 140,
+            ),
+            menuItemStyleData: const MenuItemStyleData(
+              height: 40,
             ),
           ),
           const SizedBox(height: 20),
           TextField(
             decoration: const InputDecoration(
-              labelText: 'Tevékenység neve',
-            ),
-            onChanged: (value) {
-              setState(() {
-                taskName = value;
-              });
-            },
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            decoration: const InputDecoration(
-              labelText: 'Tevékenység leírása',
+              labelText: 'Részletek',
             ),
             onChanged: (value) {
               setState(() {
@@ -526,24 +547,24 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
               });
             },
           ),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () {
-              if (taskName != null && taskDescription != null) {
-                db.collection('todos').add({
-                  'taskName': taskName,
+              if (selectedValue != null && taskDescription != null) {
+                db.collection('todos').doc(widget.patientId.toString()).set({
+                  'taskName': selectedValue,
                   'taskDescription': taskDescription,
                 }).then((_) {
-                  sendNotification(taskName!, taskDescription!);
+                  sendNotification(selectedValue!, taskDescription!);
                   Navigator.pop(context);
-                });
+                }).catchError((error) => print('Add failed: $error'));
               }
             },
-            child: Text('Feladat megadása'),
+            child: const Text('Feladat megadása'),
           ),
         ],
       ),
-    );
+    ));
   }
 
   void sendNotification(String taskName, String taskDescription) async {
