@@ -51,14 +51,27 @@ class MyApp extends StatelessWidget {
 
 class MyHomePage extends StatelessWidget {
   MyHomePage({Key? key}) : super(key: key);
-
+  bool _isApproved = false;
   Future<String?> _authUser(LoginData data) async {
     try {
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: data.name,
-        password: data.password,
-      );
-      return null;
+      var userId = data.name;
+      var user = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      var approved = user.data()!['approved'];
+      print(approved);
+      if (!approved) {
+        _isApproved = false;
+        return 'A felhasználó nem lett még jóváhagyva.';
+      } else {
+        UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+          email: data.name,
+          password: data.password,
+        );
+        _isApproved = true;
+        return null;
+      }
     } on FirebaseAuthException catch (e) {
       if (e.code == 'user-not-found') {
         return 'Nem található felhasználó ezzel az e-mail címmel.';
@@ -78,6 +91,17 @@ class MyHomePage extends StatelessWidget {
         email: data.name.toString(),
         password: data.password.toString(),
       );
+      var clientName = data.additionalSignupData!['clientName'];
+      Map<String, dynamic> additionalData = {
+        'clientName': clientName,
+        'approved': false,
+      };
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(data.name.toString())
+          .set(additionalData);
+
       return null;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'weak-password') {
@@ -94,7 +118,7 @@ class MyHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var name = "name";
+    var _keyName = "clientName";
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ápoló alkalmazás'),
@@ -106,7 +130,7 @@ class MyHomePage extends StatelessWidget {
         onSignup: _registerUser,
         additionalSignupFields: [
           UserFormField(
-            keyName: name,
+            keyName: _keyName,
             displayName: "Név",
             defaultValue: "Jane Doe",
             fieldValidator: (value) {
@@ -119,9 +143,15 @@ class MyHomePage extends StatelessWidget {
         ],
         onRecoverPassword: ((p0) => null),
         onSubmitAnimationCompleted: () {
-          Navigator.of(context).pushReplacement(MaterialPageRoute(
-            builder: (context) => const PatientSelectionScreen(),
-          ));
+          if (_isApproved) {
+            Navigator.of(context).pushReplacement(MaterialPageRoute(
+              builder: (context) => const PatientSelectionScreen(),
+            ));
+          } else {
+            Navigator.of(context).pushReplacement(MaterialPageRoute(
+              builder: (context) => const UnderReviewPage(),
+            ));
+          }
         },
         messages: LoginMessages(
           userHint: 'Felhasználónév',
@@ -599,6 +629,35 @@ class TimeTrackerWidget extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class UnderReviewPage extends StatelessWidget {
+  const UnderReviewPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Regisztráció elbírálás alatt'),
+      ),
+      body: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Text(
+              'A regisztrációd elbírálás alatt áll.',
+              style: TextStyle(fontSize: 20),
+            ),
+            SizedBox(height: 20),
+            Text(
+              'Amint elfogadásra került a regisztrációd, be tudsz jelentkezni.',
+              style: TextStyle(fontSize: 16),
+            ),
+          ],
         ),
       ),
     );
