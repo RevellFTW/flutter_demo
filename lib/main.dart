@@ -48,23 +48,22 @@ class MyApp extends StatelessWidget {
 class MyHomePage extends StatelessWidget {
   MyHomePage({Key? key}) : super(key: key);
   bool _isApproved = false;
+  final FirebaseFirestore db = FirebaseFirestore.instance;
   Future<String?> _authUser(LoginData data) async {
     try {
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: data.name,
+        password: data.password,
+      );
       var userId = data.name;
-      var user = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .get();
+      print(userId);
+      var user = await db.collection('users').doc(userId).get();
       var approved = user.data()!['approved'];
       print(approved);
       if (!approved) {
         _isApproved = false;
         return 'A felhasználó nem lett még jóváhagyva.';
       } else {
-        UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-          email: data.name,
-          password: data.password,
-        );
         _isApproved = true;
         return null;
       }
@@ -570,14 +569,12 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
   void sendNotification(String taskName, String taskDescription) async {
     String serverKey =
         'AAAAXj5_Moc:APA91bEAt0jcbmGF9EGhpwAufWuKqr3bHqtdZ_xm_UQi5KGSog586k0Md_2soKYBJKJ9Ov2W9MewDjLj9R1S-2AKL8wZSVcWTQhaPPu-QfJRbtco6qsLXAbiwE1H0s25osBNvhbYbmm2';
-    String fcmToken =
-        'duLVi7gRSE-wAs44HhcKmg:APA91bEDaC9xmLqo5pUpYRAnINKuehjw-Om7IvO21L6WK_5UfOdESW9T55XaGJqz7r8djX5pZVhSRr0NAO34lrtUlaYD-raPd8vwM-VMbqkAhLqKU_vNC3JX380GYMI6j9x1gjfsO0WO';
     Map<String, dynamic> notification = {
       'title': taskName,
       'body': taskDescription,
     };
 
-// Prepare the request headers and payload
+    // Prepare the request headers and payload
     Map<String, String> headers = {
       'Content-Type': 'application/json',
       'Authorization': 'key=$serverKey',
@@ -596,21 +593,17 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
     };
 
     // Send the POST request to FCM REST API
-    http
-        .post(
+    final response = await http.post(
       Uri.parse('https://fcm.googleapis.com/fcm/send'),
       headers: headers,
       body: json.encode(payload),
-    )
-        .then((response) {
-      if (response.statusCode == 200) {
-        print('Notification sent successfully');
-      } else {
-        print('Failed to send notification');
-      }
-    }).catchError((error) {
-      print('Error sending notification: $error');
-    });
+    );
+
+    if (response.statusCode == 200) {
+      print('Notification sent successfully');
+    } else {
+      print('Failed to send notification');
+    }
   }
 }
 
