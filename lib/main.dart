@@ -23,13 +23,22 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  FirebaseMessaging.instance.onTokenRefresh.listen((fcmToken) {
+    applicationToken = fcmToken;
+    print(applicationToken);
+    // Note: This callback is fired at each app startup and whenever a new
+    // token is generated.
+  }).onError((err) {
+    print("error getting token");
+  });
+
   runApp(const MyApp());
 }
 
 final db = FirebaseFirestore.instance;
 final FirebaseAuth _auth = FirebaseAuth.instance;
 final messaging = FirebaseMessaging.instance;
-String? globalToken = "";
+String applicationToken = '';
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
@@ -341,7 +350,6 @@ class _TodoListScreenState extends State<TodoListScreen> {
     } else {
       token = await messaging.getToken();
     }
-    globalToken = token;
 
     if (kDebugMode) {
       print('Registration Token=$token');
@@ -349,7 +357,10 @@ class _TodoListScreenState extends State<TodoListScreen> {
   }
 
   void saveToken(String token) async {
-    await FirebaseFirestore.instance.collection("UserTokens").doc("User2").set({
+    await FirebaseFirestore.instance
+        .collection("UserTokens")
+        .doc(widget.patientId)
+        .set({
       "token": token,
     });
   }
@@ -401,7 +412,11 @@ class _TodoListScreenState extends State<TodoListScreen> {
           TimeTrackerWidget(duration: _elapsedTime),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: db.collection('todos').snapshots(),
+              stream: db
+                  .collection('todos')
+                  .doc(widget.patientId.toString())
+                  .collection('tasks')
+                  .snapshots(),
               builder: (BuildContext context,
                   AsyncSnapshot<QuerySnapshot> snapshot) {
                 if (!snapshot.hasData) {
@@ -429,6 +444,8 @@ class _TodoListScreenState extends State<TodoListScreen> {
                         onPressed: () {
                           db
                               .collection('todos')
+                              .doc(widget.patientId.toString())
+                              .collection('tasks')
                               .doc(documentSnapshot.id)
                               .delete();
                         },
@@ -472,7 +489,6 @@ class _TodoListScreenState extends State<TodoListScreen> {
 
 class AddTaskWidget extends StatefulWidget {
   String token = "";
-
   final String patientId;
 
   AddTaskWidget({super.key, required this.patientId});
@@ -548,13 +564,17 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
           ),
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (selectedValue != null && taskDescription != null) {
-                db.collection('todos').doc(widget.patientId.toString()).set({
+                db
+                    .collection('todos')
+                    .doc(widget.patientId.toString())
+                    .collection('tasks')
+                    .add({
                   'taskName': selectedValue,
                   'taskDescription': taskDescription,
                 }).then((_) {
-                  sendNotification(selectedValue!, taskDescription!);
+                  sendNotification(selectedValue!, taskDescription);
                   Navigator.pop(context);
                 }).catchError((error) => print('Add failed: $error'));
               }
@@ -566,7 +586,22 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
     ));
   }
 
-  void sendNotification(String taskName, String taskDescription) async {
+  void sendNotification(String taskName, String? taskDescription) async {
+    print("im being called");
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+    const vapidKey =
+        "BAtT0PRD3_LdaR9i1eIt-MHS8IsHs97Ib_Uva8mS9uQshRAWk_1txhuRdNTa4eLqheq218J__iIjeWHsZAq0sE8";
+    String? token;
+    if (DefaultFirebaseOptions.currentPlatform == DefaultFirebaseOptions.web) {
+      token = await messaging.getToken(
+        vapidKey: vapidKey,
+      );
+    } else {
+      applicationToken = (await messaging.getToken())!;
+      print("token1: $applicationToken");
+    }
+    print("token2: $token");
+    print("tokenApp: $applicationToken");
     String serverKey =
         'AAAAXj5_Moc:APA91bEAt0jcbmGF9EGhpwAufWuKqr3bHqtdZ_xm_UQi5KGSog586k0Md_2soKYBJKJ9Ov2W9MewDjLj9R1S-2AKL8wZSVcWTQhaPPu-QfJRbtco6qsLXAbiwE1H0s25osBNvhbYbmm2';
     Map<String, dynamic> notification = {
@@ -581,7 +616,7 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
     };
 
     Map<String, dynamic> payload = {
-      'to': globalToken,
+      'to': token,
       'notification': notification,
       'android': {
         'priority': 'high',
