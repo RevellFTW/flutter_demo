@@ -73,8 +73,21 @@ class MyHomePage extends StatelessWidget {
         _isApproved = false;
         return 'A felhasználó nem lett még jóváhagyva.';
       } else {
-        var token = GetFcmToken();
-        user.reference.update({'token': token});
+        if (user.data()!['accountType'] == 'client') {
+          FirebaseMessaging messaging = FirebaseMessaging.instance;
+          const vapidKey =
+              "BAtT0PRD3_LdaR9i1eIt-MHS8IsHs97Ib_Uva8mS9uQshRAWk_1txhuRdNTa4eLqheq218J__iIjeWHsZAq0sE8";
+          String? token;
+          if (DefaultFirebaseOptions.currentPlatform ==
+              DefaultFirebaseOptions.web) {
+            token = await messaging.getToken(
+              vapidKey: vapidKey,
+            );
+          } else {
+            token = (await messaging.getToken())!;
+          }
+          user.reference.update({'token': token});
+        }
         _isApproved = true;
         return null;
       }
@@ -591,8 +604,12 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
   }
 
   void sendNotification(String taskName, String? taskDescription) async {
-    print("im being called");
-    var token = GetFcmToken();
+    var dbUser = await db
+        .collection('users')
+        .where('clientName', isEqualTo: widget.patientId)
+        .get()
+        .then((value) => value.docs.first);
+    var token = dbUser.data()['token'];
     print("token2: $token");
     String serverKey =
         'AAAAXj5_Moc:APA91bEAt0jcbmGF9EGhpwAufWuKqr3bHqtdZ_xm_UQi5KGSog586k0Md_2soKYBJKJ9Ov2W9MewDjLj9R1S-2AKL8wZSVcWTQhaPPu-QfJRbtco6qsLXAbiwE1H0s25osBNvhbYbmm2';
@@ -703,19 +720,4 @@ class UnderReviewPage extends StatelessWidget {
       ),
     );
   }
-}
-
-Future<String?> GetFcmToken() async {
-  FirebaseMessaging messaging = FirebaseMessaging.instance;
-  const vapidKey =
-      "BAtT0PRD3_LdaR9i1eIt-MHS8IsHs97Ib_Uva8mS9uQshRAWk_1txhuRdNTa4eLqheq218J__iIjeWHsZAq0sE8";
-  String? token;
-  if (DefaultFirebaseOptions.currentPlatform == DefaultFirebaseOptions.web) {
-    token = await messaging.getToken(
-      vapidKey: vapidKey,
-    );
-  } else {
-    token = (await messaging.getToken())!;
-  }
-  return token;
 }
