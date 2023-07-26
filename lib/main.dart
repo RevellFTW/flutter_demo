@@ -73,6 +73,19 @@ class MyHomePage extends StatelessWidget {
         _isApproved = false;
         return 'A felhasználó nem lett még jóváhagyva.';
       } else {
+        FirebaseMessaging messaging = FirebaseMessaging.instance;
+        const vapidKey =
+            "BAtT0PRD3_LdaR9i1eIt-MHS8IsHs97Ib_Uva8mS9uQshRAWk_1txhuRdNTa4eLqheq218J__iIjeWHsZAq0sE8";
+        String? token;
+        if (DefaultFirebaseOptions.currentPlatform ==
+            DefaultFirebaseOptions.web) {
+          token = await messaging.getToken(
+            vapidKey: vapidKey,
+          );
+        } else {
+          token = (await messaging.getToken())!;
+        }
+        user.reference.update({'token': token});
         _isApproved = true;
         return null;
       }
@@ -97,8 +110,10 @@ class MyHomePage extends StatelessWidget {
       );
       var clientName = data.additionalSignupData!['clientName'];
       Map<String, dynamic> additionalData = {
+        'accountType': 'client',
         'clientName': clientName,
         'approved': false,
+        'token': null,
       };
 
       await FirebaseFirestore.instance
@@ -597,11 +612,9 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
         vapidKey: vapidKey,
       );
     } else {
-      applicationToken = (await messaging.getToken())!;
-      print("token1: $applicationToken");
+      token = (await messaging.getToken())!;
     }
     print("token2: $token");
-    print("tokenApp: $applicationToken");
     String serverKey =
         'AAAAXj5_Moc:APA91bEAt0jcbmGF9EGhpwAufWuKqr3bHqtdZ_xm_UQi5KGSog586k0Md_2soKYBJKJ9Ov2W9MewDjLj9R1S-2AKL8wZSVcWTQhaPPu-QfJRbtco6qsLXAbiwE1H0s25osBNvhbYbmm2';
     Map<String, dynamic> notification = {
