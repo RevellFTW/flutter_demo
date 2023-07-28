@@ -1,6 +1,3 @@
-//import 'dart:html';
-//import 'dart:js';
-
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -39,6 +36,8 @@ final db = FirebaseFirestore.instance;
 final FirebaseAuth _auth = FirebaseAuth.instance;
 final messaging = FirebaseMessaging.instance;
 String applicationToken = '';
+DocumentSnapshot<Map<String, dynamic>>? currentUser;
+bool canEdit = true;
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
@@ -87,7 +86,11 @@ class MyHomePage extends StatelessWidget {
             token = (await messaging.getToken())!;
           }
           user.reference.update({'token': token});
+          canEdit = false;
+        } else {
+          canEdit = true;
         }
+        currentUser = user;
         _isApproved = true;
         return null;
       }
@@ -165,9 +168,16 @@ class MyHomePage extends StatelessWidget {
         onRecoverPassword: ((p0) => null),
         onSubmitAnimationCompleted: () {
           if (_isApproved) {
-            Navigator.of(context).pushReplacement(MaterialPageRoute(
-              builder: (context) => const PatientSelectionScreen(),
-            ));
+            if (currentUser!.data()!['accountType'] == 'client' ||
+                currentUser!.data()!['accountType'] == 'caretaker') {
+              Navigator.of(context).pushReplacement(MaterialPageRoute(
+                builder: (context) => const PatientSelectionScreen(),
+              ));
+            } else {
+              Navigator.of(context).pushReplacement(MaterialPageRoute(
+                builder: (context) => ProfileListScreen(),
+              ));
+            }
           } else {
             Navigator.of(context).pushReplacement(MaterialPageRoute(
               builder: (context) => const UnderReviewPage(),
@@ -720,4 +730,125 @@ class UnderReviewPage extends StatelessWidget {
       ),
     );
   }
+}
+
+class ProfileListScreen extends StatelessWidget {
+  final List<Patient> patients = [
+    Patient(name: 'Autó Géza', email: 'autogezza@example.com'),
+    Patient(name: 'Drift Elek', email: 'driftelek@example.com'),
+    Patient(name: 'Monza Ferenc', email: 'monzaferenc@example.com'),
+  ];
+
+  final List<Caretaker> caretakers = [
+    Caretaker(name: 'John Doe', email: 'johndoe@example.com'),
+    Caretaker(name: 'Jane Smith', email: 'janesmith@example.com'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Profiles'),
+      ),
+      body: ListView(
+        children: [
+          ListTile(
+            title: Text('Patients'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => PatientListScreen(patients: patients),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            title: Text('Caretakers'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      CaretakerListScreen(caretakers: caretakers),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PatientListScreen extends StatelessWidget {
+  final List<Patient> patients;
+
+  PatientListScreen({required this.patients});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Patients'),
+      ),
+      body: ListView.builder(
+        itemCount: patients.length,
+        itemBuilder: (context, index) {
+          final patient = patients[index];
+          return ListTile(
+            title: Text(patient.name),
+            subtitle: Text(patient.email),
+            onTap: () {
+              // Handle patient profile navigation here
+              // For example, you can navigate to a PatientProfileScreen
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class CaretakerListScreen extends StatelessWidget {
+  final List<Caretaker> caretakers;
+
+  CaretakerListScreen({required this.caretakers});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Caretakers'),
+      ),
+      body: ListView.builder(
+        itemCount: caretakers.length,
+        itemBuilder: (context, index) {
+          final caretaker = caretakers[index];
+          return ListTile(
+            title: Text(caretaker.name),
+            subtitle: Text(caretaker.email),
+            onTap: () {
+              // Handle caretaker profile navigation here
+              // For example, you can navigate to a CaretakerProfileScreen
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class Patient {
+  final String name;
+  final String email;
+
+  Patient({required this.name, required this.email});
+}
+
+class Caretaker {
+  final String name;
+  final String email;
+
+  Caretaker({required this.name, required this.email});
 }
