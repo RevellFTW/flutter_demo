@@ -22,11 +22,12 @@ void main() async {
 
   FirebaseMessaging.instance.onTokenRefresh.listen((fcmToken) {
     applicationToken = fcmToken;
-    print(applicationToken);
     // Note: This callback is fired at each app startup and whenever a new
     // token is generated.
   }).onError((err) {
-    print("error getting token");
+    if (kDebugMode) {
+      print("error getting token");
+    }
   });
 
   runApp(const MyApp());
@@ -53,21 +54,20 @@ class MyApp extends StatelessWidget {
   }
 }
 
+// ignore: must_be_immutable
 class MyHomePage extends StatelessWidget {
   MyHomePage({Key? key}) : super(key: key);
   bool _isApproved = false;
   final FirebaseFirestore db = FirebaseFirestore.instance;
   Future<String?> _authUser(LoginData data) async {
     try {
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+      await _auth.signInWithEmailAndPassword(
         email: data.name,
         password: data.password,
       );
       var userId = data.name;
-      print(userId);
       var user = await db.collection('users').doc(userId).get();
       var approved = user.data()!['approved'];
-      print(approved);
       if (!approved) {
         _isApproved = false;
         return 'A felhasználó nem lett még jóváhagyva.';
@@ -108,11 +108,6 @@ class MyHomePage extends StatelessWidget {
 
   Future<String?> _registerUser(SignupData data) async {
     try {
-      UserCredential userCredential =
-          await _auth.createUserWithEmailAndPassword(
-        email: data.name.toString(),
-        password: data.password.toString(),
-      );
       var clientName = data.additionalSignupData!['clientName'];
       Map<String, dynamic> additionalData = {
         'accountType': 'client',
@@ -142,7 +137,7 @@ class MyHomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    var _keyName = "clientName";
+    var keyName = "clientName";
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ápoló alkalmazás'),
@@ -154,7 +149,7 @@ class MyHomePage extends StatelessWidget {
         onSignup: _registerUser,
         additionalSignupFields: [
           UserFormField(
-            keyName: _keyName,
+            keyName: keyName,
             displayName: "Név",
             defaultValue: "Jane Doe",
             fieldValidator: (value) {
@@ -166,16 +161,16 @@ class MyHomePage extends StatelessWidget {
           ),
         ],
         onRecoverPassword: ((p0) => null),
-        onSubmitAnimationCompleted: () {
+        onSubmitAnimationCompleted: () async {
           if (_isApproved) {
             if (currentUser!.data()!['accountType'] == 'client' ||
                 currentUser!.data()!['accountType'] == 'caretaker') {
               Navigator.of(context).pushReplacement(MaterialPageRoute(
                 builder: (context) => const PatientSelectionScreen(),
               ));
-            } else {
+            } else if (currentUser!.data()!['accountType'] == 'back-office') {
               Navigator.of(context).pushReplacement(MaterialPageRoute(
-                builder: (context) => ProfileListScreen(),
+                builder: (context) => const ProfileListScreen(),
               ));
             }
           } else {
@@ -261,43 +256,41 @@ class PatientSelectionScreen extends StatelessWidget {
   void _requestLocationPermission(
       String patientId, BuildContext context) async {
     Location location = Location();
-    bool _serviceEnabled;
-    PermissionStatus _permissionGranted;
-    LocationData _locationData;
+    bool serviceEnabled;
+    PermissionStatus permissionGranted;
+    LocationData locationData;
 
     // Check if location services are enabled
-    _serviceEnabled = await location.serviceEnabled();
-    if (!_serviceEnabled) {
-      _serviceEnabled = await location.requestService();
-      if (!_serviceEnabled) {
+    serviceEnabled = await location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await location.requestService();
+      if (!serviceEnabled) {
         // Handle case when location services are not enabled
         return;
       }
     }
 
     // Check if the app has permission to access location
-    _permissionGranted = await location.hasPermission();
-    if (_permissionGranted == PermissionStatus.denied) {
-      _permissionGranted = await location.requestPermission();
-      if (_permissionGranted != PermissionStatus.granted) {
+    permissionGranted = await location.hasPermission();
+    if (permissionGranted == PermissionStatus.denied) {
+      permissionGranted = await location.requestPermission();
+      if (permissionGranted != PermissionStatus.granted) {
         // Handle case when permission is not granted
         return;
       }
     }
 
     // Get the current location
-    _locationData = await location.getLocation();
-    double latitude = _locationData.latitude!;
-    double longitude = _locationData.longitude!;
-
-    print(latitude);
-    print(longitude);
+    locationData = await location.getLocation();
+    double latitude = locationData.latitude!;
+    double longitude = locationData.longitude!;
 
     String coordinate = "$latitude,$longitude";
 
     // Get city name based on coordinates
 
     // Pass the city name to the TodoListScreen
+    // ignore: use_build_context_synchronously
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -325,7 +318,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
   final FirebaseFirestore db = FirebaseFirestore.instance;
   FirebaseMessaging messaging = FirebaseMessaging.instance;
   String? mtoken = "";
-  Stopwatch _stopwatch = Stopwatch();
+  final Stopwatch _stopwatch = Stopwatch();
   late Timer _timer;
   Duration _elapsedTime = Duration.zero;
 
@@ -341,7 +334,6 @@ class _TodoListScreenState extends State<TodoListScreen> {
     await FirebaseMessaging.instance.getToken().then((token) {
       setState(() {
         mtoken = token;
-        print("my token is $mtoken");
       });
       saveToken(mtoken!);
     });
@@ -362,12 +354,18 @@ class _TodoListScreenState extends State<TodoListScreen> {
       sound: true,
     );
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      print('User granted permission');
+      if (kDebugMode) {
+        print('User granted permission');
+      }
     } else if (settings.authorizationStatus ==
         AuthorizationStatus.provisional) {
-      print('User granted provisional permission');
+      if (kDebugMode) {
+        print('User granted provisional permission');
+      }
     } else {
-      print('User declined or has not accepted permission');
+      if (kDebugMode) {
+        print('User declined or has not accepted permission');
+      }
     }
 
     if (DefaultFirebaseOptions.currentPlatform == DefaultFirebaseOptions.web) {
@@ -401,7 +399,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
 
   void _startTimer() {
     _stopwatch.start();
-    _timer = Timer.periodic(Duration(seconds: 1), (Timer timer) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (Timer timer) {
       setState(() {
         _elapsedTime = _stopwatch.elapsed;
       });
@@ -460,7 +458,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
                     Map<String, dynamic>? task =
                         documentSnapshot.data() as Map<String, dynamic>?;
                     if (task == null) {
-                      return SizedBox.shrink();
+                      return const SizedBox.shrink();
                     }
 
                     return ListTile(
@@ -497,7 +495,6 @@ class _TodoListScreenState extends State<TodoListScreen> {
               },
             );
           },
-          child: Icon(Icons.add),
           mini: MediaQuery.of(context).size.width <
               600, // Set mini to true for smaller screens
           backgroundColor: Colors.blue, // Customize the background color
@@ -507,7 +504,9 @@ class _TodoListScreenState extends State<TodoListScreen> {
             borderRadius:
                 BorderRadius.circular(8.0), // Customize the border radius
           ),
-          heroTag: null, // Set heroTag to null to avoid conflicts
+          heroTag: null,
+          child:
+              const Icon(Icons.add), // Set heroTag to null to avoid conflicts
         ),
       ),
     );
@@ -620,7 +619,9 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
         .get()
         .then((value) => value.docs.first);
     var token = dbUser.data()['token'];
-    print("token2: $token");
+    if (kDebugMode) {
+      print("token2: $token");
+    }
     String serverKey =
         'AAAAXj5_Moc:APA91bEAt0jcbmGF9EGhpwAufWuKqr3bHqtdZ_xm_UQi5KGSog586k0Md_2soKYBJKJ9Ov2W9MewDjLj9R1S-2AKL8wZSVcWTQhaPPu-QfJRbtco6qsLXAbiwE1H0s25osBNvhbYbmm2';
     Map<String, dynamic> notification = {
@@ -654,9 +655,13 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
     );
 
     if (response.statusCode == 200) {
-      print('Notification sent successfully');
+      if (kDebugMode) {
+        print('Notification sent successfully');
+      }
     } else {
-      print('Failed to send notification');
+      if (kDebugMode) {
+        print('Failed to send notification');
+      }
     }
   }
 }
@@ -664,10 +669,9 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
 class TimeTrackerWidget extends StatelessWidget {
   final Duration duration;
 
-  const TimeTrackerWidget({required this.duration});
+  const TimeTrackerWidget({super.key, required this.duration});
 
   String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
     String formattedDuration = '';
 
     if (duration.inHours > 0) {
@@ -689,7 +693,7 @@ class TimeTrackerWidget extends StatelessWidget {
       child: Card(
         color: Colors.grey[200],
         child: Padding(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           child: Text(
             _formatDuration(duration),
             style: const TextStyle(
@@ -733,39 +737,32 @@ class UnderReviewPage extends StatelessWidget {
 }
 
 class ProfileListScreen extends StatelessWidget {
-  final List<Patient> patients = [
-    Patient(name: 'Autó Géza', email: 'autogezza@example.com'),
-    Patient(name: 'Drift Elek', email: 'driftelek@example.com'),
-    Patient(name: 'Monza Ferenc', email: 'monzaferenc@example.com'),
-  ];
-
-  final List<Caretaker> caretakers = [
-    Caretaker(name: 'John Doe', email: 'johndoe@example.com'),
-    Caretaker(name: 'Jane Smith', email: 'janesmith@example.com'),
-  ];
+  const ProfileListScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Profiles'),
+        title: const Text('Adatlapok'),
       ),
       body: ListView(
         children: [
           ListTile(
-            title: Text('Patients'),
+            title: const Text('Páciensek'),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => PatientListScreen(patients: patients),
+                  builder: (context) => const PatientSelectionScreen(),
                 ),
               );
             },
           ),
           ListTile(
-            title: Text('Caretakers'),
-            onTap: () {
+            title: const Text('Ápolók'),
+            onTap: () async {
+              var caretakers = await fetchCaretakersFromDb();
+              // ignore: use_build_context_synchronously
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -779,47 +776,42 @@ class ProfileListScreen extends StatelessWidget {
       ),
     );
   }
-}
 
-class PatientListScreen extends StatelessWidget {
-  final List<Patient> patients;
+  Future<List<Caretaker>> fetchCaretakersFromDb() async {
+    List<Caretaker> caretakersFromDb = [];
 
-  PatientListScreen({required this.patients});
+    try {
+      QuerySnapshot querySnapshot = await db
+          .collection('users')
+          .where('accountType', isEqualTo: 'caretaker')
+          .get();
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Patients'),
-      ),
-      body: ListView.builder(
-        itemCount: patients.length,
-        itemBuilder: (context, index) {
-          final patient = patients[index];
-          return ListTile(
-            title: Text(patient.name),
-            subtitle: Text(patient.email),
-            onTap: () {
-              // Handle patient profile navigation here
-              // For example, you can navigate to a PatientProfileScreen
-            },
-          );
-        },
-      ),
-    );
+      caretakersFromDb = querySnapshot.docs.map((doc) {
+        return Caretaker(
+          name: doc.get('clientName'),
+          email: doc.id,
+        );
+      }).toList();
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error occurred while fetching caretakers: $e');
+      }
+    }
+
+    return caretakersFromDb;
   }
 }
 
 class CaretakerListScreen extends StatelessWidget {
   final List<Caretaker> caretakers;
 
-  CaretakerListScreen({required this.caretakers});
+  const CaretakerListScreen({super.key, required this.caretakers});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Caretakers'),
+        title: const Text('Caretakers'),
       ),
       body: ListView.builder(
         itemCount: caretakers.length,
