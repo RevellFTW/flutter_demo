@@ -38,7 +38,7 @@ final FirebaseAuth _auth = FirebaseAuth.instance;
 final messaging = FirebaseMessaging.instance;
 String applicationToken = '';
 DocumentSnapshot<Map<String, dynamic>>? currentUser;
-bool canEdit = true;
+bool isClient = false;
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
@@ -86,9 +86,9 @@ class MyHomePage extends StatelessWidget {
             token = (await messaging.getToken())!;
           }
           user.reference.update({'token': token});
-          canEdit = false;
+          isClient = true;
         } else {
-          canEdit = true;
+          isClient = false;
         }
         currentUser = user;
         _isApproved = true;
@@ -163,15 +163,23 @@ class MyHomePage extends StatelessWidget {
         onRecoverPassword: ((p0) => null),
         onSubmitAnimationCompleted: () async {
           if (_isApproved) {
-            if (currentUser!.data()!['accountType'] == 'client' ||
-                currentUser!.data()!['accountType'] == 'caretaker') {
-              Navigator.of(context).pushReplacement(MaterialPageRoute(
-                builder: (context) => const PatientSelectionScreen(),
-              ));
-            } else if (currentUser!.data()!['accountType'] == 'back-office') {
-              Navigator.of(context).pushReplacement(MaterialPageRoute(
-                builder: (context) => const ProfileListScreen(),
-              ));
+            switch (currentUser!.data()!['accountType']) {
+              case 'caretaker':
+                Navigator.of(context).pushReplacement(MaterialPageRoute(
+                  builder: (context) => const PatientSelectionScreen(),
+                ));
+                break;
+              case 'back-office':
+                Navigator.of(context).pushReplacement(MaterialPageRoute(
+                  builder: (context) => const ProfileListScreen(),
+                ));
+                break;
+              //default is client
+              default:
+                Navigator.of(context).pushReplacement(MaterialPageRoute(
+                  builder: (context) => PatientTaskScreen(
+                      patientId: currentUser!.data()!['clientName']),
+                ));
             }
           } else {
             Navigator.of(context).pushReplacement(MaterialPageRoute(
@@ -484,6 +492,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
         ],
       ),
       //this is the plus button
+
       floatingActionButton: FractionallySizedBox(
         widthFactor: 0.2, // Adjust the width factor as needed
         child: FloatingActionButton(
@@ -519,6 +528,7 @@ class AddTaskWidget extends StatefulWidget {
 
   AddTaskWidget({super.key, required this.patientId});
   @override
+  // ignore: library_private_types_in_public_api
   _AddTaskWidgetState createState() => _AddTaskWidgetState();
 }
 
@@ -721,7 +731,7 @@ class UnderReviewPage extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             Text(
-              'A regisztrációd elbírálás alatt áll.',
+              'A regisztrációd elbírálás alatt áll, vagy nem lett még szerep hozzárendelve a fiókhoz.',
               style: TextStyle(fontSize: 20),
             ),
             SizedBox(height: 20),
@@ -817,12 +827,25 @@ class CaretakerListScreen extends StatelessWidget {
         itemCount: caretakers.length,
         itemBuilder: (context, index) {
           final caretaker = caretakers[index];
+          caretaker.clients = [
+            Patient(name: 'Géza', email: "jane@doe.hu"),
+            Patient(name: 'Elek', email: "jane@doe.hu"),
+            Patient(name: 'Ferenc', email: "jane@doe.hu"),
+          ];
           return ListTile(
             title: Text(caretaker.name),
             subtitle: Text(caretaker.email),
             onTap: () {
               // Handle caretaker profile navigation here
               // For example, you can navigate to a CaretakerProfileScreen
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => CaretakerProfileScreen(
+                    caretaker: caretaker,
+                  ),
+                ),
+              );
             },
           );
         },
@@ -831,8 +854,253 @@ class CaretakerListScreen extends StatelessWidget {
   }
 }
 
+class CaretakerProfileScreen extends StatefulWidget {
+  final Caretaker caretaker;
+
+  const CaretakerProfileScreen({Key? key, required this.caretaker})
+      : super(key: key);
+
+  @override
+  // ignore: library_private_types_in_public_api
+  _CaretakerProfileScreenState createState() => _CaretakerProfileScreenState();
+}
+
+class _CaretakerProfileScreenState extends State<CaretakerProfileScreen> {
+  late TextEditingController _nameController;
+  late TextEditingController _emailController;
+  late TextEditingController _passwordController;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.caretaker.name);
+    _emailController = TextEditingController(text: widget.caretaker.email);
+    _passwordController =
+        TextEditingController(text: widget.caretaker.password);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Caretaker Profile'),
+      ),
+      body: ListView(
+        children: <Widget>[
+          TextFormField(
+            controller: _nameController,
+            decoration: const InputDecoration(
+              labelText: 'Name',
+            ),
+          ),
+          TextFormField(
+            controller: _emailController,
+            decoration: const InputDecoration(
+              labelText: 'Email',
+            ),
+          ),
+          TextFormField(
+            controller: _passwordController,
+            decoration: const InputDecoration(
+              labelText: 'Password',
+            ),
+            obscureText: true,
+          ),
+          for (var client in widget.caretaker.clients)
+            ListTile(
+              title: Text(client.name),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete),
+                onPressed: () {
+                  setState(() {
+                    widget.caretaker.clients.remove(client);
+                  });
+                },
+              ),
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder: (context) {
+                    var clientController =
+                        TextEditingController(text: client.name);
+                    return AlertDialog(
+                      title: const Text('Edit Client Name'),
+                      content: TextField(
+                        controller: clientController,
+                      ),
+                      actions: <Widget>[
+                        TextButton(
+                          child: const Text('Cancel'),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                        TextButton(
+                          child: const Text('OK'),
+                          onPressed: () {
+                            setState(() {
+                              var index =
+                                  widget.caretaker.clients.indexOf(client);
+                              widget.caretaker.clients[index].name =
+                                  clientController.text;
+                            });
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class PatientTaskScreen extends StatefulWidget {
+  final String patientId;
+
+  const PatientTaskScreen({Key? key, required this.patientId})
+      : super(key: key);
+
+  @override
+  // ignore: library_private_types_in_public_api
+  _PatientTaskScreenState createState() => _PatientTaskScreenState();
+}
+
+class _PatientTaskScreenState extends State<PatientTaskScreen> {
+  final FirebaseFirestore db = FirebaseFirestore.instance;
+  FirebaseMessaging messaging = FirebaseMessaging.instance;
+  String? mtoken = "";
+
+  @override
+  void initState() {
+    super.initState();
+    requestPermission();
+    getToken();
+  }
+
+  void getToken() async {
+    await FirebaseMessaging.instance.getToken().then((token) {
+      setState(() {
+        mtoken = token;
+      });
+      saveToken(mtoken!);
+    });
+  }
+
+  void requestPermission() async {
+    FirebaseMessaging messaging = FirebaseMessaging.instance;
+    const vapidKey =
+        "BAtT0PRD3_LdaR9i1eIt-MHS8IsHs97Ib_Uva8mS9uQshRAWk_1txhuRdNTa4eLqheq218J__iIjeWHsZAq0sE8";
+    String? token;
+    NotificationSettings settings = await messaging.requestPermission(
+      alert: true,
+      announcement: false,
+      badge: true,
+      carPlay: false,
+      criticalAlert: false,
+      provisional: false,
+      sound: true,
+    );
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      if (kDebugMode) {
+        print('User granted permission');
+      }
+    } else if (settings.authorizationStatus ==
+        AuthorizationStatus.provisional) {
+      if (kDebugMode) {
+        print('User granted provisional permission');
+      }
+    } else {
+      if (kDebugMode) {
+        print('User declined or has not accepted permission');
+      }
+    }
+
+    if (DefaultFirebaseOptions.currentPlatform == DefaultFirebaseOptions.web) {
+      token = await messaging.getToken(
+        vapidKey: vapidKey,
+      );
+    } else {
+      token = await messaging.getToken();
+    }
+
+    if (kDebugMode) {
+      print('Registration Token=$token');
+    }
+  }
+
+  void saveToken(String token) async {
+    await FirebaseFirestore.instance
+        .collection("UserTokens")
+        .doc(widget.patientId)
+        .set({
+      "token": token,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Elvégzett feladatok: ${widget.patientId}'),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: db
+                  .collection('todos')
+                  .doc(widget.patientId.toString())
+                  .collection('tasks')
+                  .snapshots(),
+              builder: (BuildContext context,
+                  AsyncSnapshot<QuerySnapshot> snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+                return ListView.builder(
+                  itemCount: snapshot.data!.docs.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    DocumentSnapshot documentSnapshot =
+                        snapshot.data!.docs[index];
+                    Map<String, dynamic>? task =
+                        documentSnapshot.data() as Map<String, dynamic>?;
+                    if (task == null) {
+                      return const SizedBox.shrink();
+                    }
+                    return ListTile(
+                      title: Text(task['taskName']),
+                      subtitle: Text(task['taskDescription']),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+    //this is the plus button
+  }
+}
+
+// #region Models
 class Patient {
-  final String name;
+  String name;
   final String email;
 
   Patient({required this.name, required this.email});
@@ -841,6 +1109,9 @@ class Patient {
 class Caretaker {
   final String name;
   final String email;
+  String password = "";
+  List<Patient> clients = [];
 
-  Caretaker({required this.name, required this.email});
+  Caretaker({required this.name, required this.email, password, clients});
 }
+// #endregion
