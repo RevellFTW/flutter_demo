@@ -1,5 +1,4 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_login/flutter_login.dart';
 
@@ -24,12 +23,7 @@ void main() async {
     applicationToken = fcmToken;
     // Note: This callback is fired at each app startup and whenever a new
     // token is generated.
-  }).onError((err) {
-    if (kDebugMode) {
-      print("error getting token");
-    }
   });
-
   runApp(const MyApp());
 }
 
@@ -351,8 +345,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     const vapidKey =
         "BAtT0PRD3_LdaR9i1eIt-MHS8IsHs97Ib_Uva8mS9uQshRAWk_1txhuRdNTa4eLqheq218J__iIjeWHsZAq0sE8";
-    String? token;
-    NotificationSettings settings = await messaging.requestPermission(
+    await messaging.requestPermission(
       alert: true,
       announcement: false,
       badge: true,
@@ -361,31 +354,13 @@ class _TodoListScreenState extends State<TodoListScreen> {
       provisional: false,
       sound: true,
     );
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      if (kDebugMode) {
-        print('User granted permission');
-      }
-    } else if (settings.authorizationStatus ==
-        AuthorizationStatus.provisional) {
-      if (kDebugMode) {
-        print('User granted provisional permission');
-      }
-    } else {
-      if (kDebugMode) {
-        print('User declined or has not accepted permission');
-      }
-    }
 
     if (DefaultFirebaseOptions.currentPlatform == DefaultFirebaseOptions.web) {
-      token = await messaging.getToken(
+      await messaging.getToken(
         vapidKey: vapidKey,
       );
     } else {
-      token = await messaging.getToken();
-    }
-
-    if (kDebugMode) {
-      print('Registration Token=$token');
+      await messaging.getToken();
     }
   }
 
@@ -610,6 +585,11 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
                   'taskName': selectedValue,
                   'taskDescription': taskDescription,
                 }).then((_) {
+                  db
+                      .collection('todos')
+                      .doc(widget.patientId.toString())
+                      .update(
+                          {'caretaker': currentUser!.data()!['clientName']});
                   sendNotification(selectedValue!, taskDescription);
                   Navigator.pop(context);
                 }).catchError((error) => print('Add failed: $error'));
@@ -629,9 +609,6 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
         .get()
         .then((value) => value.docs.first);
     var token = dbUser.data()['token'];
-    if (kDebugMode) {
-      print("token2: $token");
-    }
     String serverKey =
         'AAAAXj5_Moc:APA91bEAt0jcbmGF9EGhpwAufWuKqr3bHqtdZ_xm_UQi5KGSog586k0Md_2soKYBJKJ9Ov2W9MewDjLj9R1S-2AKL8wZSVcWTQhaPPu-QfJRbtco6qsLXAbiwE1H0s25osBNvhbYbmm2';
     Map<String, dynamic> notification = {
@@ -658,21 +635,11 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
     };
 
     // Send the POST request to FCM REST API
-    final response = await http.post(
+    await http.post(
       Uri.parse('https://fcm.googleapis.com/fcm/send'),
       headers: headers,
       body: json.encode(payload),
     );
-
-    if (response.statusCode == 200) {
-      if (kDebugMode) {
-        print('Notification sent successfully');
-      }
-    } else {
-      if (kDebugMode) {
-        print('Failed to send notification');
-      }
-    }
   }
 }
 
@@ -772,6 +739,7 @@ class ProfileListScreen extends StatelessWidget {
             title: const Text('Ápolók'),
             onTap: () async {
               var caretakers = await fetchCaretakersFromDb();
+
               // ignore: use_build_context_synchronously
               Navigator.push(
                 context,
@@ -790,24 +758,35 @@ class ProfileListScreen extends StatelessWidget {
   Future<List<Caretaker>> fetchCaretakersFromDb() async {
     List<Caretaker> caretakersFromDb = [];
 
-    try {
-      QuerySnapshot querySnapshot = await db
+    QuerySnapshot querySnapshot = await db
+        .collection('users')
+        .where('accountType', isEqualTo: 'caretaker')
+        .get();
+
+    caretakersFromDb = querySnapshot.docs.map((doc) {
+      return Caretaker(
+        name: doc.get('clientName'),
+        email: doc.id,
+      );
+    }).toList();
+    caretakersFromDb.forEach((caretaker) async {
+      List<String> clientsNames = await db
+          .collection('todos')
+          .where('caretaker', isEqualTo: caretaker.name)
+          .get()
+          .then((value) => value.docs.map((doc) => doc.id).toList());
+      var clients = await db
           .collection('users')
-          .where('accountType', isEqualTo: 'caretaker')
-          .get();
-
-      caretakersFromDb = querySnapshot.docs.map((doc) {
-        return Caretaker(
-          name: doc.get('clientName'),
-          email: doc.id,
-        );
-      }).toList();
-    } catch (e) {
-      if (kDebugMode) {
-        print('Error occurred while fetching caretakers: $e');
-      }
-    }
-
+          .where('clientName', whereIn: clientsNames)
+          .get()
+          .then((value) => value.docs.map((doc) {
+                return Patient(
+                  name: doc.get('clientName'),
+                  email: doc.id,
+                );
+              }).toList());
+      caretaker.clients = clients;
+    });
     return caretakersFromDb;
   }
 }
@@ -827,11 +806,6 @@ class CaretakerListScreen extends StatelessWidget {
         itemCount: caretakers.length,
         itemBuilder: (context, index) {
           final caretaker = caretakers[index];
-          caretaker.clients = [
-            Patient(name: 'Géza', email: "jane@doe.hu"),
-            Patient(name: 'Elek', email: "jane@doe.hu"),
-            Patient(name: 'Ferenc', email: "jane@doe.hu"),
-          ];
           return ListTile(
             title: Text(caretaker.name),
             subtitle: Text(caretaker.email),
@@ -922,6 +896,9 @@ class _CaretakerProfileScreenState extends State<CaretakerProfileScreen> {
                 onPressed: () {
                   setState(() {
                     widget.caretaker.clients.remove(client);
+                    db.collection('todos').doc(client.name).set({
+                      "caretaker": '',
+                    });
                   });
                 },
               ),
@@ -946,12 +923,7 @@ class _CaretakerProfileScreenState extends State<CaretakerProfileScreen> {
                         TextButton(
                           child: const Text('OK'),
                           onPressed: () {
-                            setState(() {
-                              var index =
-                                  widget.caretaker.clients.indexOf(client);
-                              widget.caretaker.clients[index].name =
-                                  clientController.text;
-                            });
+                            //put code here to modify patient's name if needed
                             Navigator.of(context).pop();
                           },
                         ),
@@ -1003,8 +975,7 @@ class _PatientTaskScreenState extends State<PatientTaskScreen> {
     FirebaseMessaging messaging = FirebaseMessaging.instance;
     const vapidKey =
         "BAtT0PRD3_LdaR9i1eIt-MHS8IsHs97Ib_Uva8mS9uQshRAWk_1txhuRdNTa4eLqheq218J__iIjeWHsZAq0sE8";
-    String? token;
-    NotificationSettings settings = await messaging.requestPermission(
+    await messaging.requestPermission(
       alert: true,
       announcement: false,
       badge: true,
@@ -1013,31 +984,13 @@ class _PatientTaskScreenState extends State<PatientTaskScreen> {
       provisional: false,
       sound: true,
     );
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      if (kDebugMode) {
-        print('User granted permission');
-      }
-    } else if (settings.authorizationStatus ==
-        AuthorizationStatus.provisional) {
-      if (kDebugMode) {
-        print('User granted provisional permission');
-      }
-    } else {
-      if (kDebugMode) {
-        print('User declined or has not accepted permission');
-      }
-    }
 
     if (DefaultFirebaseOptions.currentPlatform == DefaultFirebaseOptions.web) {
-      token = await messaging.getToken(
+      await messaging.getToken(
         vapidKey: vapidKey,
       );
     } else {
-      token = await messaging.getToken();
-    }
-
-    if (kDebugMode) {
-      print('Registration Token=$token');
+      await messaging.getToken();
     }
   }
 
