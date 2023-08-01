@@ -1,12 +1,10 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_login/flutter_login.dart';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
-
 import 'firebase_options.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -93,6 +91,12 @@ class MyHomePage extends StatelessWidget {
         return 'Nem található felhasználó ezzel az e-mail címmel.';
       } else if (e.code == 'wrong-password') {
         return 'Helytelen jelszó.';
+      } else if (e.code == 'invalid-email') {
+        return 'Helytelen e-mail cím.';
+      } else if (e.code == 'user-disabled') {
+        return 'A felhasználói fiók letiltva.';
+      } else if (e.code == 'too-many-requests') {
+        return 'Túl sok sikertelen bejelentkezési kísérlet. Kérlek próbáld újra később.';
       }
       return e.message;
     } catch (e) {
@@ -783,6 +787,9 @@ class ProfileListScreen extends StatelessWidget {
                 return Patient(
                   name: doc.get('clientName'),
                   email: doc.id,
+                  age: doc.get('age'),
+                  medicalState: doc.get('medicalState'),
+                  allergies: doc.get('allergies'),
                 );
               }).toList());
       caretaker.clients = clients;
@@ -1055,8 +1062,16 @@ class _PatientTaskScreenState extends State<PatientTaskScreen> {
 class Patient {
   String name;
   final String email;
+  int age;
+  String medicalState;
+  List<String> allergies = [];
 
-  Patient({required this.name, required this.email});
+  Patient(
+      {required this.name,
+      required this.email,
+      required this.age,
+      required this.medicalState,
+      required this.allergies});
 }
 
 class Caretaker {
