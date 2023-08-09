@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_login/flutter_login.dart';
@@ -10,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:location/location.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
+import 'package:intl/intl.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +33,7 @@ final FirebaseAuth _auth = FirebaseAuth.instance;
 final messaging = FirebaseMessaging.instance;
 String applicationToken = '';
 DocumentSnapshot<Map<String, dynamic>>? currentUser;
+String currentUserID = '';
 bool isClient = false;
 
 class MyApp extends StatelessWidget {
@@ -83,6 +87,7 @@ class MyHomePage extends StatelessWidget {
           isClient = false;
         }
         currentUser = user;
+        currentUserID = userId;
         _isApproved = true;
         return null;
       }
@@ -234,27 +239,30 @@ class PatientSelectionScreen extends StatelessWidget {
         title: const Text('Válasszon pácienst'),
         centerTitle: true,
       ),
-      body: ListView(
-        children: [
-          ListTile(
-            title: const Text('Autó Géza'),
-            onTap: () {
-              _requestLocationPermission("Géza", context);
-            },
-          ),
-          ListTile(
-            title: const Text('Drift Elek'),
-            onTap: () {
-              _requestLocationPermission("Elek", context);
-            },
-          ),
-          ListTile(
-            title: const Text('Monza Ferenc'),
-            onTap: () {
-              _requestLocationPermission("Ferenc", context);
-            },
-          ),
-        ],
+      body: FutureBuilder<List<Patient>>(
+        future: fetchPatientsFromDatabase(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return CircularProgressIndicator(); // Loading indicator
+          } else if (snapshot.hasError) {
+            return Text('Error: ${snapshot.error}');
+          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Text('No patients found.');
+          } else {
+            return ListView.builder(
+              itemCount: snapshot.data!.length,
+              itemBuilder: (context, index) {
+                final patient = snapshot.data![index];
+                return ListTile(
+                  title: Text(patient.name),
+                  onTap: () {
+                    _requestLocationPermission(patient.id, context);
+                  },
+                );
+              },
+            );
+          }
+        },
       ),
     );
   }
@@ -306,6 +314,25 @@ class PatientSelectionScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<List<Patient>> fetchPatientsFromDatabase() async {
+    List<Patient> patientsFromDb = [];
+
+    QuerySnapshot querySnapshot = await db.collection('patients').get();
+
+    patientsFromDb = querySnapshot.docs.map((doc) {
+      return Patient(
+        id: doc.id,
+        name: doc.get('name'),
+        email: doc.get('email'),
+        age: doc.get('age'),
+        medicalState: doc.get('medicalState'),
+        allergies: doc.get('allergies'),
+      );
+    }).toList();
+
+    return patientsFromDb;
   }
 }
 
@@ -423,45 +450,70 @@ class _TodoListScreenState extends State<TodoListScreen> {
           ),
           TimeTrackerWidget(duration: _elapsedTime),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
+            child: StreamBuilder<QuerySnapshot<Object?>>(
               stream: db
-                  .collection('todos')
-                  .doc(widget.patientId.toString())
                   .collection('tasks')
+                  .where("patientID", isEqualTo: widget.patientId)
                   .snapshots(),
               builder: (BuildContext context,
-                  AsyncSnapshot<QuerySnapshot> snapshot) {
+                  AsyncSnapshot<QuerySnapshot<Object?>> snapshot) {
                 if (!snapshot.hasData) {
                   return const Center(
                     child: CircularProgressIndicator(),
                   );
                 }
 
-                return ListView.builder(
-                  itemCount: snapshot.data!.docs.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    DocumentSnapshot documentSnapshot =
-                        snapshot.data!.docs[index];
-                    Map<String, dynamic>? task =
-                        documentSnapshot.data() as Map<String, dynamic>?;
-                    if (task == null) {
-                      return const SizedBox.shrink();
-                    }
+                // Filter out non-collection fields from the snapshot data
+                List<QueryDocumentSnapshot> dayCollections = snapshot.data!.docs
+                    .where((doc) => doc is CollectionReference)
+                    .toList();
 
-                    return ListTile(
-                      title: Text(task['taskName']),
-                      subtitle: Text(task['taskDescription']),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () {
-                          db
-                              .collection('todos')
-                              .doc(widget.patientId.toString())
-                              .collection('tasks')
-                              .doc(documentSnapshot.id)
-                              .delete();
-                        },
-                      ),
+                if (dayCollections.isEmpty) {
+                  return const Center(
+                    child: Text('No data available'),
+                  );
+                }
+
+                return ListView.builder(
+                  itemCount: dayCollections.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    String date = dayCollections[index].id;
+                    CollectionReference dayCollection =
+                        dayCollections[index] as CollectionReference;
+
+                    return StreamBuilder<QuerySnapshot<Object?>>(
+                      stream: dayCollection.snapshots(),
+                      builder: (BuildContext context,
+                          AsyncSnapshot<QuerySnapshot<Object?>> tasksSnapshot) {
+                        if (!tasksSnapshot.hasData) {
+                          return const SizedBox.shrink();
+                        }
+
+                        List<QueryDocumentSnapshot<Object?>> taskDocuments =
+                            tasksSnapshot.data!.docs;
+
+                        // Convert task documents to Map<String, dynamic> list
+                        List<Map<String, dynamic>> tasks = taskDocuments
+                            .map((doc) => doc.data() as Map<String, dynamic>)
+                            .toList();
+
+                        return ExpansionTile(
+                          title: Text(date),
+                          children: tasks.map((task) {
+                            return ListTile(
+                              title: Text(task['taskName']),
+                              subtitle: Text(task['taskDescription']),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete),
+                                onPressed: () {
+                                  // Remove the task document from the day's collection
+                                  dayCollection.doc(task['taskId']).delete();
+                                },
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
                     );
                   },
                 );
@@ -470,6 +522,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
           ),
         ],
       ),
+
       //this is the plus button
 
       floatingActionButton: FractionallySizedBox(
@@ -581,19 +634,19 @@ class _AddTaskWidgetState extends State<AddTaskWidget> {
           ElevatedButton(
             onPressed: () async {
               if (selectedValue != null && taskDescription != null) {
-                db
-                    .collection('todos')
-                    .doc(widget.patientId.toString())
-                    .collection('tasks')
-                    .add({
+                var now = DateTime.now();
+                var formatter = DateFormat('yyyy-MM-dd');
+                String formattedDate = formatter.format(now);
+                db.collection('tasks').add({
+                  'date': formattedDate,
+                  'patientID': widget.patientId,
                   'taskName': selectedValue,
                   'taskDescription': taskDescription,
                 }).then((_) {
                   db
-                      .collection('todos')
+                      .collection('patients')
                       .doc(widget.patientId.toString())
-                      .update(
-                          {'caretaker': currentUser!.data()!['clientName']});
+                      .update({'caretaker': currentUserID});
                   sendNotification(selectedValue!, taskDescription);
                   Navigator.pop(context);
                 }).catchError((error) => print('Add failed: $error'));
@@ -769,30 +822,28 @@ class ProfileListScreen extends StatelessWidget {
 
     caretakersFromDb = querySnapshot.docs.map((doc) {
       return Caretaker(
-        name: doc.get('clientName'),
+        name: doc.get('name'),
         email: doc.id,
       );
     }).toList();
     caretakersFromDb.forEach((caretaker) async {
-      List<String> clientsNames = await db
-          .collection('todos')
-          .where('caretaker', isEqualTo: caretaker.name)
+      List<Patient> patients = await db
+          .collection('patients')
+          //refactor this to use caretaker id instead of email
+          .where('caretaker', isEqualTo: caretaker.email)
           .get()
-          .then((value) => value.docs.map((doc) => doc.id).toList());
-      var clients = await db
-          .collection('users')
-          .where('clientName', whereIn: clientsNames)
-          .get()
+          //get name field of the document
           .then((value) => value.docs.map((doc) {
                 return Patient(
-                  name: doc.get('clientName'),
-                  email: doc.id,
+                  id: doc.id,
+                  name: doc.get('name'),
+                  email: doc.get('email'),
                   age: doc.get('age'),
                   medicalState: doc.get('medicalState'),
                   allergies: doc.get('allergies'),
                 );
               }).toList());
-      caretaker.clients = clients;
+      caretaker.clients = patients;
     });
     return caretakersFromDb;
   }
@@ -1060,18 +1111,20 @@ class _PatientTaskScreenState extends State<PatientTaskScreen> {
 
 // #region Models
 class Patient {
+  String id = "";
   String name;
   final String email;
-  int age;
+  String age;
   String medicalState;
-  List<String> allergies = [];
+  Map<String, dynamic> allergies = {};
 
   Patient(
       {required this.name,
       required this.email,
       required this.age,
       required this.medicalState,
-      required this.allergies});
+      required this.allergies,
+      required this.id});
 }
 
 class Caretaker {
