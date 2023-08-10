@@ -256,7 +256,7 @@ class PatientSelectionScreen extends StatelessWidget {
                 return ListTile(
                   title: Text(patient.name),
                   onTap: () {
-                    _requestLocationPermission(patient.id, context);
+                    _requestLocationPermission(patient, context);
                   },
                 );
               },
@@ -267,8 +267,7 @@ class PatientSelectionScreen extends StatelessWidget {
     );
   }
 
-  void _requestLocationPermission(
-      String patientId, BuildContext context) async {
+  void _requestLocationPermission(Patient patient, BuildContext context) async {
     Location location = Location();
     bool serviceEnabled;
     PermissionStatus permissionGranted;
@@ -309,7 +308,7 @@ class PatientSelectionScreen extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (context) => TodoListScreen(
-          patientId: patientId,
+          patient: patient,
           coordinate: coordinate,
         ),
       ),
@@ -337,10 +336,10 @@ class PatientSelectionScreen extends StatelessWidget {
 }
 
 class TodoListScreen extends StatefulWidget {
-  final String patientId;
+  final Patient patient;
   final String? coordinate;
 
-  const TodoListScreen({Key? key, required this.patientId, this.coordinate})
+  const TodoListScreen({Key? key, required this.patient, this.coordinate})
       : super(key: key);
 
   @override
@@ -398,7 +397,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
   void saveToken(String token) async {
     await FirebaseFirestore.instance
         .collection("UserTokens")
-        .doc(widget.patientId)
+        .doc(widget.patient.id)
         .set({
       "token": token,
     });
@@ -431,7 +430,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Elvégzett feladatok: ${widget.patientId}'),
+        title: Text('Elvégzett feladatok: ${widget.patient.name}'),
       ),
       body: Column(
         children: [
@@ -453,7 +452,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
             child: StreamBuilder<QuerySnapshot<Object?>>(
               stream: db
                   .collection('tasks')
-                  .where("patientID", isEqualTo: widget.patientId)
+                  .where("patientID", isEqualTo: widget.patient.id)
                   .snapshots(),
               builder: (BuildContext context,
                   AsyncSnapshot<QuerySnapshot<Object?>> snapshot) {
@@ -520,6 +519,139 @@ class _TodoListScreenState extends State<TodoListScreen> {
               },
             ),
           ),
+          // Modify patient attributes
+          ListTile(
+            title: Text('Name: ${widget.patient.name}'),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  String updatedName = widget.patient.name;
+                  return AlertDialog(
+                    title: Text('Edit Name'),
+                    content: TextField(
+                      onChanged: (value) {
+                        updatedName = value;
+                      },
+                      controller: TextEditingController(text: updatedName),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        child: Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          // Update patient's name in the database
+                          await FirebaseFirestore.instance
+                              .collection('patients')
+                              .doc(widget.patient.id)
+                              .update({'name': updatedName});
+                          // Update patient's name in the UI
+                          setState(() {
+                            widget.patient.name = updatedName;
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: Text('Save'),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+          ListTile(
+            title: Text('Age: ${widget.patient.age}'),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  String updatedAge = widget.patient.age;
+                  return AlertDialog(
+                    title: Text('Edit age'),
+                    content: TextField(
+                      onChanged: (value) {
+                        updatedAge = value;
+                      },
+                      controller: TextEditingController(text: updatedAge),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        child: Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          // Update patient's name in the database
+                          await FirebaseFirestore.instance
+                              .collection('patients')
+                              .doc(widget.patient.id)
+                              .update({'age': updatedAge});
+                          // Update patient's name in the UI
+                          setState(() {
+                            widget.patient.age = updatedAge;
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: Text('Save'),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+          ListTile(
+            title: Text('Medical state: ${widget.patient.medicalState}'),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  String updatedState = widget.patient.medicalState;
+                  return AlertDialog(
+                    title: Text('Edit State'),
+                    //todo dropdown menu instead of textfield for modification
+                    content: TextField(
+                      onChanged: (value) {
+                        updatedState = value;
+                      },
+                      controller: TextEditingController(text: updatedState),
+                    ),
+
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        child: Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          // Update patient's name in the database
+                          await FirebaseFirestore.instance
+                              .collection('patients')
+                              .doc(widget.patient.id)
+                              .update({'medicalState': updatedState});
+                          // Update patient's name in the UI
+                          setState(() {
+                            widget.patient.medicalState = updatedState;
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: Text('Save'),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+          //create one more ListTile for Map<String,dynamic> allergies
         ],
       ),
 
@@ -532,7 +664,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
             showModalBottomSheet(
               context: context,
               builder: (BuildContext context) {
-                return AddTaskWidget(patientId: widget.patientId);
+                return AddTaskWidget(patientId: widget.patient.id);
               },
             );
           },
