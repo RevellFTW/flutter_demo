@@ -434,8 +434,8 @@ class _TodoListScreenState extends State<TodoListScreen> {
       ),
       body: Column(
         children: [
-          Align(
-            alignment: Alignment.bottomLeft,
+          Expanded(
+            //alignment: Alignment.bottomLeft,
             child: Padding(
               padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
               child: Text(
@@ -614,38 +614,63 @@ class _TodoListScreenState extends State<TodoListScreen> {
                 builder: (BuildContext context) {
                   String updatedState = widget.patient.medicalState;
                   return AlertDialog(
-                    title: Text('Edit State'),
-                    //todo dropdown menu instead of textfield for modification
-                    content: TextField(
-                      onChanged: (value) {
-                        updatedState = value;
+                    title: const Text('Edit State'),
+                    content: StatefulBuilder(
+                      builder: (BuildContext context, StateSetter setState) {
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            DropdownButton<String>(
+                              value: updatedState,
+                              onChanged: (newValue) {
+                                setState(() {
+                                  updatedState = newValue!;
+                                });
+                              },
+                              items: <String>[
+                                'Critical',
+                                'Bad',
+                                'Stable',
+                                // Add more options as needed
+                              ].map<DropdownMenuItem<String>>((String value) {
+                                return DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(value),
+                                );
+                              }).toList(),
+                            ),
+                            SizedBox(height: 16.0),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                  },
+                                  child: Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () async {
+                                    // Update patient's medicalState in the database
+                                    await FirebaseFirestore.instance
+                                        .collection('patients')
+                                        .doc(widget.patient.id)
+                                        .update({'medicalState': updatedState});
+                                    // Update patient's medicalState in the UI
+                                    setState(() {
+                                      widget.patient.medicalState =
+                                          updatedState;
+                                    });
+                                    Navigator.pop(context);
+                                  },
+                                  child: Text('Save'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        );
                       },
-                      controller: TextEditingController(text: updatedState),
                     ),
-
-                    actions: [
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
-                        child: Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () async {
-                          // Update patient's name in the database
-                          await FirebaseFirestore.instance
-                              .collection('patients')
-                              .doc(widget.patient.id)
-                              .update({'medicalState': updatedState});
-                          // Update patient's name in the UI
-                          setState(() {
-                            widget.patient.medicalState = updatedState;
-                          });
-                          Navigator.pop(context);
-                        },
-                        child: Text('Save'),
-                      ),
-                    ],
                   );
                 },
               );
@@ -1237,7 +1262,6 @@ class _PatientTaskScreenState extends State<PatientTaskScreen> {
         ],
       ),
     );
-    //this is the plus button
   }
 }
 
