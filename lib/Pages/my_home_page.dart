@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_login/flutter_login.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'dart:async';
 import '../Screens/patient_selection_screen.dart';
 import '../Screens/patient_task_screen.dart';
@@ -13,8 +14,15 @@ import '../main.dart';
 
 final FirebaseAuth _auth = FirebaseAuth.instance;
 
-class MyHomePage extends StatelessWidget {
+class MyHomePage extends StatefulWidget {
   MyHomePage({Key? key}) : super(key: key);
+  @override
+  State<StatefulWidget> createState() {
+    return MyHomePageState();
+  }
+}
+
+class MyHomePageState extends State<MyHomePage> {
   bool _isApproved = false;
   final FirebaseFirestore db = FirebaseFirestore.instance;
   Future<String?> _authUser(LoginData data) async {
@@ -98,6 +106,18 @@ class MyHomePage extends StatelessWidget {
       return e.toString();
       //todo handle already used e-mail address;
     }
+  }
+
+  void initialization() async {
+    //implement no logout feature if user is logged in
+
+    FlutterNativeSplash.remove();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    initialization();
   }
 
   @override
